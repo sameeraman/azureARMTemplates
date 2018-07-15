@@ -1,0 +1,24 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "virtualNetworkName": {
+            "value": "MVP-TST-VNET1"        
+        },
+        "routeTableName": {
+            "value": "MVP-TST-VNET-RT1"
+        },
+        "workloadVMName": {
+            "value": "MVPVM1"
+        },
+        "jumpBoxVMName": {
+            "value": "MVPVMJUMP"
+        },
+        "azureFirewallName": {
+            "value": "MVPTSTAZFW2"
+        },
+        "vmAdminUsername": {
+            "value": "azureadmin"
+        }
+    }
+}

@@ -1,0 +1,480 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "virtualNetworkName": {
+            "type": "string",
+            "defaultValue": "MVP-TST-VNET1",
+            "metadata": {
+                "description": "Virtual Network Name"
+            }
+        },
+        "routeTableName": {
+            "type": "string",
+            "defaultValue": "MVP-TST-VNET-RT1",
+            "metadata": {
+                "description": "Route Table name"
+            }
+        },
+        "workloadVMName": {
+            "type": "string",
+            "defaultValue": "MVPVM1",
+            "metadata": {
+                "description": "VM Name for Workload Server "
+            }
+        },
+        "jumpBoxVMName": {
+            "type": "string",
+            "defaultValue": "MVPVMJUMP",
+            "metadata": {
+                "description": "VM Name for Jumpbox"
+            }
+        },
+        "azureFirewallName": {
+            "type": "string",
+            "defaultValue": "MVPTSTAZFW2",
+            "metadata": {
+                "description": "Azure Firewall Name"
+            }
+        },
+        "vmAdminUsername": {
+            "type": "string",
+            "defaultValue": "azureadmin",
+            "metadata": {
+                "description": "Username to login to the servers"
+            }
+        },
+        "vmAdminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Password to login to the servers"
+            }
+        }
+    },
+    "variables": {
+        "vmSize": "Standard_DS2_V2",
+        "windowsOSVersion": "2016-Datacenter",
+        "azureFirewallPIP": "[concat(parameters('azureFirewallName'),'-PIP')]",
+        "diagStorageAccountName": "[toLower(concat('stg', uniqueString(resourceGroup().id),'diag'))]",
+        "adminUsername": "azureadmin",
+        "adminPassword": "3RUwNf1spErujpfu3RqK",
+        "jumpboxVMPIP": "[concat(parameters('jumpBoxVMName'),'-PIP1')]",
+        "jumpboxVMNIC": "[concat(parameters('jumpBoxVMName'),'-NIC1')]",
+        "workloadVMNIC": "[concat(parameters('workloadVMName'),'-NIC1')]",
+        "vnetAddressPrefixes": "10.0.0.0/16",
+        "frontendAddressPrefix": "10.0.0.0/24",
+        "backendAddressPrefix": "10.0.1.0/24",
+        "azureFWAddressPrefix": "10.0.3.0/24",
+        "managementAddressPrefix": "10.0.4.0/24"
+    },
+    "resources": [
+        {
+            "apiVersion": "2015-06-15",
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[parameters('virtualNetworkName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('vnetAddressPrefixes')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "Frontend",
+                        "properties": {
+                            "addressPrefix": "[variables('frontendAddressPrefix')]"
+                        }
+                    },
+                    {
+                        "name": "Backend",
+                        "properties": {
+                            "addressPrefix": "[variables('backendAddressPrefix')]"
+                        }
+                    },
+                    {
+                        "name": "AzureFirewallSubnet",
+                        "properties": {
+                            "addressPrefix": "[variables('azureFWAddressPrefix')]"
+                        }
+                    },
+                    {
+                        "name": "Management",
+                        "properties": {
+                            "addressPrefix": "[variables('managementAddressPrefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/routeTables",
+            "name": "[parameters('routeTableName')]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/azureFirewalls/', parameters('azureFirewallName'))]"
+            ],
+            "properties": {
+                "routes": [
+                    {
+                        "name": "[concat(parameters('routeTableName'),'Route1')]",
+                        "properties": {
+                            "addressPrefix": "0.0.0.0/0",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIpAddress": "[reference(parameters('azureFirewallName')).ipConfigurations[0].properties.privateIPAddress]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIpAddresses",
+            "sku": {
+                "name": "Standard"
+            },
+            "name": "[variables('azureFirewallPIP')]",
+            "apiVersion": "2017-08-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "publicIPAllocationMethod": "Static",
+                "dnsSettings": {
+                    "domainNameLabel": "[toLower(variables('azureFirewallPIP'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/azureFirewalls",
+            "name": "[parameters('azureFirewallName')]",
+            "apiVersion": "2018-04-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/publicIpAddresses/', variables('azureFirewallPIP'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "IpConf",
+                        "properties": {
+                            "subnet": {
+                                "id": "[concat(resourceId('Microsoft.Network/virtualNetworks',parameters('virtualNetworkName')),'/subnets/','AzureFirewallSubnet')]"
+                            },
+                            "InternalPublicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIpAddresses', variables('azureFirewallPIP'))]"
+                            }
+                        }
+                    }
+                ],
+                "applicationRuleCollections": [
+                    {
+                        "name": "myAppRuleCollection1",
+                        "properties": {
+                            "priority": 200,
+                            "action": {
+                                "type": "Allow"
+                            },
+                            "rules": [
+                                {
+                                    "name": "myAppRule1",
+                                    "protocols": [
+                                        {
+                                            "port": "80",
+                                            "protocolType": "http"
+                                        },
+                                        {
+                                            "port": "443",
+                                            "protocolType": "https"
+                                        }
+                                    ],
+                                    "targetUrls": [
+                                        "*.microsoft.com",
+                                        "microsoft.com"
+                                    ]
+                                },
+                                {
+                                    "name": "myAppRule2",
+                                    "protocols": [
+                                        {
+                                            "port": "80",
+                                            "protocolType": "http"
+                                        },
+                                        {
+                                            "port": "443",
+                                            "protocolType": "https"
+                                        }
+                                    ],
+                                    "targetUrls": [
+                                        "*.github.com",
+                                        "github.com"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('diagStorageAccountName')]",
+            "apiVersion": "2017-10-01",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS"
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[variables('workloadVMNIC')]",
+            "apiVersion": "2016-09-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "subnet": {
+                                "id": "[concat(resourceId('Microsoft.Network/virtualNetworks',parameters('virtualNetworkName')),'/subnets/','Backend')]"
+                            },
+                            "privateIPAllocationMethod": "Dynamic"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2017-03-30",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('workloadVMName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/', variables('workloadVMNIC'))]",
+                "[concat('Microsoft.Storage/storageAccounts/', variables('diagStorageAccountName'))]",
+                "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+            ],
+            "properties": {
+                "licenseType": "Windows_Server",
+                "hardwareProfile": {
+                    "vmSize": "[variables('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('workloadVMName')]",
+                    "adminUsername": "[parameters('vmAdminUsername')]",
+                    "adminPassword": "[parameters('vmAdminPassword')]",
+                    "windowsConfiguration": {
+                        "provisionVMAgent": true,
+                        "enableAutomaticUpdates": false,
+                        "timeZone": "W. Australia Standard Time"
+                    }
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "[variables('windowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "[concat(parameters('workloadVMName'),'-OS')]",
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "Premium_LRS"
+                        },
+                        "caching": "ReadWrite"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('workloadVMNIC'))]"
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[reference(resourceId('Microsoft.Storage/storageAccounts', variables('diagStorageAccountName')), '2015-06-15').primaryEndpoints['blob']]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIpAddresses",
+            "sku": {
+                "name": "Basic"
+            },
+            "name": "[variables('jumpboxVMPIP')]",
+            "apiVersion": "2017-08-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "publicIPAllocationMethod": "Static",
+                "dnsSettings": {
+                    "domainNameLabel": "[toLower(variables('jumpboxVMPIP'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[variables('jumpboxVMNIC')]",
+            "apiVersion": "2016-09-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/publicIpAddresses/', variables('jumpboxVMPIP'))]",
+                "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "subnet": {
+                                "id": "[concat(resourceId('Microsoft.Network/virtualNetworks',parameters('virtualNetworkName')),'/subnets/','Management')]"
+                            },
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('jumpboxVMPIP'))]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2017-03-30",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('jumpBoxVMName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/', variables('jumpboxVMNIC'))]",
+                "[concat('Microsoft.Storage/storageAccounts/', variables('diagStorageAccountName'))]",
+                "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+            ],
+            "properties": {
+                "licenseType": "Windows_Server",
+                "hardwareProfile": {
+                    "vmSize": "[variables('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('jumpBoxVMName')]",
+                    "adminUsername": "[parameters('vmAdminUsername')]",
+                    "adminPassword": "[parameters('vmAdminPassword')]",
+                    "windowsConfiguration": {
+                        "provisionVMAgent": true,
+                        "enableAutomaticUpdates": false,
+                        "timeZone": "W. Australia Standard Time"
+                    }
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "[variables('windowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "[concat(parameters('jumpBoxVMName'),'-OS')]",
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "Premium_LRS"
+                        },
+                        "caching": "ReadWrite"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('jumpboxVMNIC'))]"
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[reference(resourceId('Microsoft.Storage/storageAccounts', variables('diagStorageAccountName')), '2015-06-15').primaryEndpoints['blob']]"
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2017-05-10",
+            "name": "RouteTabletoVnet",
+            "type": "Microsoft.Resources/deployments",
+            "dependsOn": [
+                "[concat('Microsoft.Network/azureFirewalls/', parameters('azureFirewallName'))]",
+                "[concat('Microsoft.Network/routeTables/', parameters('routeTableName'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "apiVersion": "2015-06-15",
+                            "type": "Microsoft.Network/virtualNetworks",
+                            "name": "[parameters('virtualNetworkName')]",
+                            "location": "[resourceGroup().location]",
+                            "properties": {
+                                "addressSpace": {
+                                    "addressPrefixes": [
+                                        "[variables('vnetAddressPrefixes')]"
+                                    ]
+                                },
+                                "subnets": [
+                                    {
+                                        "name": "Frontend",
+                                        "properties": {
+                                            "addressPrefix": "[variables('frontendAddressPrefix')]",
+                                            "routeTable": {
+                                                "id": "[resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))]"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "name": "Backend",
+                                        "properties": {
+                                            "addressPrefix": "[variables('backendAddressPrefix')]",
+                                            "routeTable": {
+                                                "id": "[resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))]"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "name": "AzureFirewallSubnet",
+                                        "properties": {
+                                            "addressPrefix": "[variables('azureFWAddressPrefix')]"
+                                        }
+                                    },
+                                    {
+                                        "name": "Management",
+                                        "properties": {
+                                            "addressPrefix": "[variables('managementAddressPrefix')]"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "parameters": {}
+            }
+        }
+    ],
+    "outputs": {
+        "FWIPaddress": {
+            "type": "string",
+            "value": "[reference(parameters('azureFirewallName')).ipConfigurations[0].properties.privateIPAddress]"
+        },
+        "ManagementVMPublicIP": {
+            "type": "string",
+            "value": "[reference(variables('jumpboxVMPIP')).ipAddress]"
+        },
+        "workloadVMNICIP": {
+            "type": "string",
+            "value": "[reference(variables('workloadVMNIC')).ipConfigurations[0].properties.privateIPAddress]"
+        }
+    }
+}
