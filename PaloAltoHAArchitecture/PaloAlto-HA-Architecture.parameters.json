@@ -1,0 +1,27 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "StorageAccountName": {
+            "value": "panteststg"
+        },
+        "MgmtDnsName": {
+            "value": "pan-mgmt"
+        },
+        "WebDnsName": {
+            "value": "pan-web"
+        },
+        "FirewallVmName": {
+            "value": "PAN-FW"
+        },
+        "FirewallVmSize": {
+            "value": "Standard_DS3_v2"
+        },
+        "FromGatewayLogin": {
+            "value": "0.0.0.0/0"
+        },
+        "fwSku": {
+            "value": "byol"
+        }
+    }
+}
