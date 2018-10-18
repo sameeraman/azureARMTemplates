@@ -11,5 +11,5 @@ Once successfully provisioned, it will have the following resources.
 
 This Template is a based on the single NVA architecture provided by Palo Alto - https://github.com/PaloAltoNetworks/azure/tree/master/two-tier-sample
 
-Once you provision the ARM template, you will have to load the Palo Alto Configuration with the given xml files into the NVAs. I have provided a word file with some screenshots to guide you with the steps for loading the XML files. 
+Once you provision the ARM template, you will have to load the Palo Alto Configuration with the given xml files into the NVAs. I have provided a word file with some screenshots to guide you with the steps for loading the XML files. You will need a evaluation license of Palo Alto to test this end to end. 
 
