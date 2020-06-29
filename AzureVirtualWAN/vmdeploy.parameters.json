@@ -1,0 +1,24 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vmName": {
+            "value": "CTSEUSPVM1"
+        },
+        "adminUserName": {
+            "value": "azureadmin"
+        },
+        "adminPassword": {
+            "value": "Server123"
+        },
+        "vnetResourceGroup": {
+            "value": "CTS-EUS-PRD-NET"
+        },
+        "vnetName": {
+            "value": "CTS-EUS-PRD-VNET"
+        },
+        "vnetSubnetName": {
+            "value": "Subnet-1"
+        }
+    }
+}
