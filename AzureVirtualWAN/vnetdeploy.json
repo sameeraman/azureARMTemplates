@@ -5,21 +5,30 @@
         "virtualNetworkName": {
            "type": "string",
            "metadata": {
-                "description": "description"
+                "description": "Virtual Network Name"
             },
             "defaultValue": "CTS-EUS-PRD-VNET"
         },
         "vNetAddressSpace": {
            "type": "string",
            "metadata": {
-                "description": "10.0.0.0/16"
+                "description": "Virtual Network Address Space"
+            },
+            "defaultValue": "10.0.0.0/16"
+        },
+        "subnet1Name": {
+           "type": "string",
+           "metadata": {
+                "description": "Subnet 1 Name"
             }
         },
         "subnet1AddressSpace": {
            "type": "string",
            "metadata": {
-                "description": "10.0.0.0/24"
-            }
+                "description": "Subnet Address Space"
+            },
+            "defaultValue" : "10.0.0.0/24"
+            
         }
     },
     "functions": [],
@@ -43,7 +52,7 @@
                 },
                 "subnets": [
                     {
-                        "name": "Subnet-1",
+                        "name": "[parameters('subnet1Name')]",
                         "properties": {
                             "addressPrefix": "[parameters('subnet1AddressSpace')]"
                         }
