@@ -20,7 +20,8 @@
            "type": "string",
            "metadata": {
                 "description": "Subnet 1 Name"
-            }
+            },
+            "defaultValue" : "Server"
         },
         "subnet1AddressSpace": {
            "type": "string",
