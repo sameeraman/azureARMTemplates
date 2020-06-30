@@ -1,0 +1,99 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vWANName": {
+            "type": "string",
+            "metadata": {
+                "description": "Virtual WAN Name"
+            },
+            "defaultValue": "CTS-EUS-PRD-VWAN1"
+        },
+        "vWANHubs": {
+            "type": "object",
+            "metadata": {
+                "description": "Object of vWAN Hubs to be created"
+            },
+            "defaultValue": {
+                "hub1": {
+                    "hubName": "CTS-AUE-PRD-VWAN1-HUB",
+                    "hubAddressSpace": "10.0.1.0/24",
+                    "hubLocation": "Australia East",
+                    "hubConnectionVnetName": "CTS-AUE-PRD-VNET1",
+                    "hubConnectionVnetRGName": "CTS-AUE-PRD-NET"
+                },
+                "hub2": {
+                    "hubName": "CTS-EUS-PRD-VWAN1-HUB",
+                    "hubAddressSpace": "10.0.2.0/24",
+                    "hubLocation": "East US",
+                    "hubConnectionVnetName": "CTS-EUS-PRD-VNET1",
+                    "hubConnectionVnetRGName": "CTS-EUS-PRD-NET"
+                }
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Network/virtualWans",
+            "apiVersion": "2020-04-01",
+            "name": "[parameters('vWANName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "disableVpnEncryption": false,
+                "allowBranchToBranchTraffic": false,
+                "office365LocalBreakoutCategory": "None",
+                "type": "Standard"
+            }
+        },
+        {
+            "copy": {
+                "name": "hubcopy",
+                "count": "[length(parameters('vWANHubs'))]",
+                "mode": "serial",
+                "batchSize" : 1
+            },
+            "type": "Microsoft.Network/virtualHubs",
+            "apiVersion": "2020-04-01",
+            "name": "[parameters('vWANHubs')[concat('hub',copyIndex(1))].hubName]",
+            "location": "[parameters('vWANHubs')[concat('hub',copyIndex(1))].hubLocation]",
+            "dependsOn": [
+                "[parameters('vWANName')]"
+            ],
+            "properties": {
+                "virtualNetworkConnections": [
+                    {
+                        "name": "[concat(parameters('vWANHubs')[concat('hub',copyIndex(1))].hubConnectionVnetName,'-Connection')]",
+                        "properties": {
+                            "routingConfiguration": {
+                                "propagatedRouteTables": {
+                                    "labels": [],
+                                    "ids": []
+                                },
+                                "vnetRoutes": {
+                                    "staticRoutes": []
+                                }
+                            },
+                            "remoteVirtualNetwork": {
+                                "id": "[resourceId(parameters('vWANHubs')[concat('hub',copyIndex(1))].hubConnectionVnetRGName,'Microsoft.Network/virtualNetworks', parameters('vWANHubs')[concat('hub',copyIndex(1))].hubConnectionVnetName)]"
+                            },
+                            "allowHubToRemoteVnetTransit": true,
+                            "allowRemoteVnetToUseHubVnetGateways": false,
+                            "enableInternetSecurity": true
+                        }
+                    }
+                ],
+                "virtualHubRouteTableV2s": [],
+                "addressPrefix": "[parameters('vWANHubs')[concat('hub',copyIndex(1))].hubAddressSpace]",
+                "routeTable": {
+                    "routes": []
+                },
+                "virtualWan": {
+                    "id": "[resourceId('Microsoft.Network/virtualWans', parameters('vWANName'))]"
+                },
+                "sku": "Standard"
+            }
+        }
+    ],
+    "outputs": {}
+}

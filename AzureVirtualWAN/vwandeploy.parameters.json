@@ -1,0 +1,27 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vWANName": {
+            "value": "CTS-AUE-PRD-VWAN1"
+        },
+        "vWANHubs": {
+            "value": {
+                "hub1": {
+                    "hubName": "CTS-AUE-PRD-VWAN1-HUB",
+                    "hubAddressSpace": "10.0.1.0/24",
+                    "hubLocation": "Australia East",
+                    "hubConnectionVnetName": "CTS-AUE-PRD-VNET1",
+                    "hubConnectionVnetRGName": "CTS-AUE-PRD-NET"
+                },
+                "hub2": {
+                    "hubName": "CTS-EUS-PRD-VWAN1-HUB",
+                    "hubAddressSpace": "10.0.2.0/24",
+                    "hubLocation": "East US",
+                    "hubConnectionVnetName": "CTS-EUS-PRD-VNET1",
+                    "hubConnectionVnetRGName": "CTS-EUS-PRD-NET"
+                }
+            }
+        }
+    }
+}
