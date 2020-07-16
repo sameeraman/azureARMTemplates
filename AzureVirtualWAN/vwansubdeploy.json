@@ -1,0 +1,265 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "companyCode": {
+            "type": "string",
+            "metadata": {
+                "description": "Company Code - Eg: CTS for Contoso"
+            },
+            "defaultValue": "CTS"
+        },
+        "environment": {
+            "type": "string",
+            "metadata": {
+                "description": "Environment : PRD, DEV or UAT"
+            },
+            "defaultValue": "PRD"
+        },
+        "serverAdminUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Server Admin Username"
+            },
+            "defaultValue": "azureadmin"
+        },
+        "serverAdminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Server Admin Password"
+            }
+        },
+        "vWANHubDetails": {
+            "type": "object",
+            "metadata": {
+                "description": "Object of VWAN hub details"
+            },
+            "defaultValue": {
+                "region1": {
+                    "regionShortName": "AUE",
+                    "regionAzureLocation": "Australia East",
+                    "regionVWANHubAddressSpace": "10.0.1.0/24",
+                    "regionVNetAddressSpace": "10.1.0.0/16",
+                    "regionVNetSubnetAddressSpace": "10.1.0.0/24"
+                },
+                "region2": {
+                    "regionShortName": "EUS",
+                    "regionAzureLocation": "East US",
+                    "regionVWANHubAddressSpace": "10.0.2.0/24",
+                    "regionVNetAddressSpace": "10.2.0.0/16",
+                    "regionVNetSubnetAddressSpace": "10.2.0.0/24"
+                }
+            }
+        }
+    },
+    "functions": [],
+    "variables": {
+        "vnetDeployLinkedTemplateUri": "https://raw.githubusercontent.com/sameeraman/azureARMTemplates/master/AzureVirtualWAN/vnetdeploy.json",
+        "vmDeployLinkedTemplateUri": "https://raw.githubusercontent.com/sameeraman/azureARMTemplates/master/AzureVirtualWAN/vmdeploy.json",
+        //"vWanDeployLinkedTemplateUri": "https://raw.githubusercontent.com/sameeraman/azureARMTemplates/master/AzureVirtualWAN/vwandeploy.json",
+        "vWanHubDeployLinkedTemplateUri": "https://raw.githubusercontent.com/sameeraman/azureARMTemplates/master/AzureVirtualWAN/vwanhubdeploy.json",
+        "subnetName": "Server",
+        "vWANRGName": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region1')].regionShortName,'-',parameters('environment'),'-VWAN')]",
+        "vWANName": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region1')].regionShortName,'-',parameters('environment'),'-VWAN1')]",
+        "vWANLocation": "[parameters('vWANHubDetails')[concat('region1')].regionAzureLocation]"
+    },
+    "resources": [
+        // Deploy Networking Resource Group and VNET for each Region 
+        {
+            "copy": {
+                "name": "regioncopy-vnetrg",
+                "count": "[length(parameters('vWANHubDetails'))]",
+                "mode": "serial",
+                "batchSize": 1
+            },
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2019-10-01",
+            "name": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-NET')]",
+            "location": "[parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionAzureLocation]",
+            "properties": {}
+        },
+        {
+            "copy": {
+                "name": "regioncopy-vnet",
+                "count": "[length(parameters('vWANHubDetails'))]",
+                "mode": "serial",
+                "batchSize": 1
+            },
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "[concat('deployment-',parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-NET')]",
+            "resourceGroup": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-NET')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups/', concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-NET'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('vnetDeployLinkedTemplateUri')]"
+                },
+                "parameters": {
+                    "virtualNetworkName": {
+                        "value": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-VNET1')]"
+                    },
+                    "vNetAddressSpace": {
+                        "value": "[parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionVNetAddressSpace]"
+                    },
+                    "subnet1Name": {
+                        "value": "[variables('subnetName')]"
+                    },
+                    "subnet1AddressSpace": {
+                        "value": "[parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionVNetSubnetAddressSpace]"
+                    }
+                }
+            }
+        },
+        
+        // Deploy VM resource groups and provision VMs in each region VNET
+        {
+            "copy": {
+                "name": "regioncopy-vmrg",
+                "count": "[length(parameters('vWANHubDetails'))]",
+                "mode": "serial",
+                "batchSize": 1
+            },
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2019-10-01",
+            "name": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-VM')]",
+            "location": "[parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionAzureLocation]",
+            "properties": {}
+        },
+        {
+            "copy": {
+                "name": "regioncopy-vm",
+                "count": "[length(parameters('vWANHubDetails'))]",
+                "mode": "serial",
+                "batchSize": 1
+            },
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "[concat('deployment-',parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-VM')]",
+            "resourceGroup": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-VM')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups/', concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-NET'))]",
+                "[resourceId('Microsoft.Resources/resourceGroups/', concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-VM'))]",
+                "[concat('deployment-',parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-NET')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('vmDeployLinkedTemplateUri')]"
+                },
+                "parameters": {
+                    "vmName": {
+                        "value": "[concat(parameters('companyCode'),parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,first(parameters('environment')),'VM1')]"
+                    },
+                    "adminUserName": {
+                        "value": "[parameters('serverAdminUsername')]"
+                    },
+                    "adminPassword": {
+                        "value": "[parameters('serverAdminPassword')]"
+                    },
+                    "vnetResourceGroup": {
+                        "value": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-NET')]"
+                    },
+                    "vnetName": {
+                        "value": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-VNET1')]"
+                    },
+                    "vnetSubnetName": {
+                        "value": "[variables('subnetName')]"
+                    }
+                }
+            }
+        },
+
+        // Deploy VWAN Resource Group and VWAN  
+        {
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2019-10-01",
+            "name": "[variables('vWANRGName')]",
+            "location": "[variables('vWANLocation')]",
+            "properties": {}
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "VWANDeployment",
+            "resourceGroup": "[variables('vWANRGName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups/', variables('vWANRGName'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "type": "Microsoft.Network/virtualWans",
+                            "apiVersion": "2020-04-01",
+                            "name": "[variables('vWANName')]",
+                            "location": "[variables('vWANLocation')]",
+                            "properties": {
+                                "disableVpnEncryption": false,
+                                "allowBranchToBranchTraffic": false,
+                                "office365LocalBreakoutCategory": "None",
+                                "type": "Standard"
+                            }
+                        }
+                    ],
+                    "outputs": {}
+                }
+            }
+        },
+
+        // Deploy VWAN hubs in each region
+        {
+            "copy": {
+                "name": "regioncopy-vwanhub",
+                "count": "[length(parameters('vWANHubDetails'))]",
+                "mode": "serial",
+                "batchSize": 1
+            },
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-10-01",
+            "name": "[concat('deployment-',parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-VWAN1-HUB1')]",
+            "resourceGroup": "[variables('vWANRGName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups/', variables('vWANRGName'))]",
+                "[concat('deployment-',parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-NET')]",
+                "VWANDeployment"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('vWanHubDeployLinkedTemplateUri')]"
+                },
+                "parameters": {
+                    "vWANName": {
+                        "value": "[variables('vWANName')]"
+                    },
+                    "vWANHubName": {
+                        "value": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-VWAN1-HUB1')]"
+                    },
+                    "vWANHubAddressSpace": {
+                        "value": "[parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionVWANHubAddressSpace]"
+                    },
+                    "vWANHubLocation": {
+                        "value": "[parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionAzureLocation]"
+                    },
+                    "vWANHubVnetName": {
+                        "value": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-VNET1')]"
+                    },
+                    "vWANHubVnetRGName": {
+                        "value": "[concat(parameters('companyCode'),'-',parameters('vWANHubDetails')[concat('region',copyIndex(1))].regionShortName,'-',parameters('environment'),'-NET')]"
+                    }
+                }
+            }
+
+        }
+
+    ],
+    "outputs": {}
+}
